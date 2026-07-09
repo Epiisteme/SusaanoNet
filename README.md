@@ -66,5 +66,5 @@ Navigate to `http://localhost:8080` in your web browser. Initiating a forecast w
 
 ## 6. Hardware Requirements
 
-* **Training (Colab Standalone):** Training the architecture on the 118,000-row historical tensor requires an Nvidia A100 GPU (40GB VRAM) or equivalent. Training duration is approximately 2-4 hours.
-* **Inference (Live Production):** The trained weights are highly optimized. Real-time inference can be executed efficiently on standard CPU infrastructure or entry-level hardware accelerators (e.g., Apple M-Series Silicon or Nvidia T4). Memory overhead is less than 2GB during active inference.
+* **Minimum Requirements (Inference):** The pre-trained weights are highly optimized. Real-time inference can be executed efficiently on standard multi-core CPU infrastructure (e.g., Intel i5, Apple M1) or entry-level hardware accelerators. Minimum 8GB System RAM required.
+* **Recommended Requirements (Training):** Training the architecture from scratch on the 118,000-row historical tensor requires a hardware accelerator with at least 16GB VRAM (e.g., Nvidia T4, RTX 3080, or A100 for larger batch sizes). Minimum 16GB System RAM required.
