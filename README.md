@@ -27,6 +27,11 @@ The model requires high-dimensional Spatial-Temporal Tensors shaped `[Batch, Tim
 * **Derivatives:** Continuous Bitcoin Perpetual Futures Funding Rates.
 * **Macroeconomic:** S&P 500 Close, US Dollar Index (DXY), Gold Close, Bitcoin Hash Rate, Fear & Greed Index.
 
+### Data Download
+Due to GitHub's file size limits, the massive historical CSV datasets required for training have been hosted externally. 
+To train the architecture locally or on Colab, download the dataset directory from the following Google Drive link and place it in the `data/` folder:
+[Download Susanoo Systems Datasets](https://drive.google.com/drive/folders/12zffGslgV24tN6UH4fbrC9B3XRnECgHx?usp=drive_link)
+
 ## 4. Environment Setup
 
 ### Prerequisites
