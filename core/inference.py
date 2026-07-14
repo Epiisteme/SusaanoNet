@@ -1,127 +1,147 @@
+"""
+Real-Time Inference Engine
+==========================
+Loads the trained Hybrid Architecture and executes multi-horizon
+quantile regression + directional classification predictions.
+"""
 import os
 import torch
 import joblib
 import numpy as np
-import pandas as pd
 from core.model import HybridArchitecture
+from core.features import (
+    ASSETS, ASSET_FEATURE_COLS, GLOBAL_FEATURE_COLS, FEATURES_PER_ASSET,
+)
+
 
 class RealTimeHybridInference:
+    """Production inference engine for the Hybrid Architecture.
+
+    Loads pre-trained weights and scaler, accepts raw feature matrices,
+    and returns multi-horizon quantile + directional predictions.
     """
-    The production execution engine for the Hybrid Architecture.
-    Loads the Variable Selection Network, GNN, and Mamba-3 MIMO layers, 
-    and returns multi-asset quantile risk boundaries.
-    """
+
     def __init__(self, artifacts_dir: str = "artifacts"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         weights_path = os.path.join(artifacts_dir, "hybrid_mamba3_weights.pth")
         scaler_path = os.path.join(artifacts_dir, "hybrid_scaler.pkl")
-        
+
         if not os.path.exists(weights_path) or not os.path.exists(scaler_path):
             raise FileNotFoundError(f"Missing model artifacts in {artifacts_dir}/")
 
         self.scaler = joblib.load(scaler_path)
-        
-        # Build the Hybrid Architecture skeleton
-        self.model = HybridArchitecture(
-            input_dim=14, 
-            d_model=128, 
-            d_state=64, 
-            num_assets=3, 
-            num_quantiles=3, 
-            forecast_horizons=1
-        )
-        
-        # Inject the weights
-        self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
-        self.model.to(self.device)
-        self.model.eval() 
-        
-        # We need the exact column order the scaler was fit on (30 columns total, minus datetime)
-        self.raw_columns = [
-            'btc_open', 'btc_high', 'btc_low', 'btc_close', 'btc_volume', 
-            'eth_open', 'eth_high', 'eth_low', 'eth_close', 'eth_volume', 
-            'sol_open', 'sol_high', 'sol_low', 'sol_close', 'sol_volume', 
-            'btc_funding_rate', 'sp500_close', 'dxy_close', 'gold_close', 'hash_rate', 'fng_score', 
-            'btc_log_return', 'btc_volatility_1d', 'btc_volatility_7d', 
-            'eth_log_return', 'eth_volatility_1d', 'eth_volatility_7d', 
-            'sol_log_return', 'sol_volatility_1d', 'sol_volatility_7d'
-        ]
-        
-        # How features are grouped per asset node internally
-        self.btc_cols = [c for c in self.raw_columns if c.startswith('btc_') and c != 'btc_funding_rate']
-        self.eth_cols = [c for c in self.raw_columns if c.startswith('eth_')]
-        self.sol_cols = [c for c in self.raw_columns if c.startswith('sol_')]
-        self.global_cols = ['btc_funding_rate', 'sp500_close', 'dxy_close', 'gold_close', 'hash_rate', 'fng_score']
-        
-        # To find indices for fast tensor reconstruction
-        self.btc_idx = [self.raw_columns.index(c) for c in self.btc_cols]
-        self.eth_idx = [self.raw_columns.index(c) for c in self.eth_cols]
-        self.sol_idx = [self.raw_columns.index(c) for c in self.sol_cols]
-        self.global_idx = [self.raw_columns.index(c) for c in self.global_cols]
-        
-    def predict_quantiles(self, recent_60m_data: np.ndarray, last_closes: list) -> dict:
-        """
-        Accepts a (60, 30) numpy array of the last 60 periods of multi-asset tick data.
-        Returns a dict of the 10th, 50th, and 90th percentile predicted prices for BTC, ETH, SOL.
-        """
-        if recent_60m_data.shape != (60, 30):
-            raise ValueError(f"Expected input shape (60, 30), got {recent_60m_data.shape}")
 
-        # 1. Scale the raw 30-feature incoming data
-        scaled_input = self.scaler.transform(recent_60m_data) # (60, 30)
-        
-        # 2. Reconstruct into the Spatial Tensor: (Time, Assets, Features) -> (60, 3, 14)
-        tensor_data = np.zeros((60, 3, 14))
-        for t in range(60):
+        # Number of per-asset features + global features
+        num_asset_features = len(ASSET_FEATURE_COLS)
+        num_global_features = len(GLOBAL_FEATURE_COLS)
+        input_dim = num_asset_features + num_global_features
+
+        self.model = HybridArchitecture(
+            input_dim=input_dim,
+            d_model=128,
+            d_state=64,
+            num_assets=3,
+            num_quantiles=3,
+            forecast_horizons=3,  # 15m, 1h, 4h
+        )
+
+        self.model.load_state_dict(
+            torch.load(weights_path, map_location=self.device)
+        )
+        self.model.to(self.device)
+        self.model.eval()
+
+        # Feature layout constants
+        self.num_asset_features = num_asset_features
+        self.num_global_features = num_global_features
+        self.num_total_features = len(ASSET_FEATURE_COLS) * 3 + num_global_features
+
+    def predict(self, recent_data: np.ndarray, last_closes: list) -> dict:
+        """Run inference on a raw feature matrix.
+
+        Parameters
+        ----------
+        recent_data : np.ndarray
+            Shape (seq_length, num_total_features). Feature order must match
+            the column ordering defined in core/features.py.
+        last_closes : list
+            [btc_close, eth_close, sol_close] — most recent close prices.
+
+        Returns
+        -------
+        dict
+            Nested predictions per asset with quantile boundaries and directions.
+        """
+        seq_length = recent_data.shape[0]
+        expected_cols = self.num_total_features
+
+        if recent_data.shape[1] != expected_cols:
+            raise ValueError(
+                f"Expected {expected_cols} features, got {recent_data.shape[1]}"
+            )
+
+        # Scale the input
+        scaled_input = self.scaler.transform(recent_data)
+
+        # Reconstruct into spatial tensor: (Time, Assets, Features)
+        tensor_data = np.zeros((seq_length, 3, FEATURES_PER_ASSET))
+
+        for t in range(seq_length):
             row = scaled_input[t]
-            # BTC Node (8 specific + 6 global)
-            tensor_data[t, 0, :8] = row[self.btc_idx]
-            tensor_data[t, 0, 8:] = row[self.global_idx]
-            # ETH Node
-            tensor_data[t, 1, :8] = row[self.eth_idx]
-            tensor_data[t, 1, 8:] = row[self.global_idx]
-            # SOL Node
-            tensor_data[t, 2, :8] = row[self.sol_idx]
-            tensor_data[t, 2, 8:] = row[self.global_idx]
-            
-        # 3. Add Batch Dimension and send to device -> (1, 60, 3, 14)
-        input_tensor = torch.tensor(tensor_data, dtype=torch.float32).unsqueeze(0).to(self.device)
-        
-        # 4. Forward Pass through VSN -> GNN -> Mamba-3 -> Quantile Head
+            for asset_i in range(3):
+                # Per-asset features
+                start = asset_i * self.num_asset_features
+                end = start + self.num_asset_features
+                tensor_data[t, asset_i, :self.num_asset_features] = row[start:end]
+
+                # Global features (appended after all asset features in the flat row)
+                global_start = 3 * self.num_asset_features
+                tensor_data[t, asset_i, self.num_asset_features:] = row[
+                    global_start:global_start + self.num_global_features
+                ]
+
+        # Add batch dimension -> (1, T, A, F)
+        input_tensor = torch.tensor(
+            tensor_data, dtype=torch.float32
+        ).unsqueeze(0).to(self.device)
+
         with torch.no_grad():
-            # Output Shape: (Batch=1, Assets=3, Horizons=1, Quantiles=3)
-            quantiles = self.model(input_tensor)
-            
-        # Remove Batch and Horizon dims -> (3, 3) (Assets, Quantiles)
-        quantiles = quantiles[0, :, 0, :].cpu().numpy()
-        
-        # 5. Inverse Transform the predicted log returns back into absolute prices
+            outputs = self.model(input_tensor)
+
+        # Parse outputs into structured response
+        # (This will be fully implemented in Phase 2 after model rewrite)
+        quantiles = outputs['quantiles'][0].cpu().numpy()  # (A, H, Q)
+        directions = outputs['directions'][0].cpu().numpy()  # (A, H, 3)
+
+        horizon_names = ['15m', '1h', '4h']
+        direction_labels = ['down', 'neutral', 'up']
         results = {}
-        assets = ['BTC', 'ETH', 'SOL']
-        log_return_indices = [
-            self.raw_columns.index('btc_log_return'),
-            self.raw_columns.index('eth_log_return'),
-            self.raw_columns.index('sol_log_return')
-        ]
-        
-        for asset_i, asset_name in enumerate(assets):
-            asset_quantiles = []
-            for q_i in range(3): # 0=10th, 1=50th, 2=90th
-                predicted_scaled_return = quantiles[asset_i, q_i]
-                
-                # Create a dummy row of 30 zeros to inverse transform
-                dummy_row = np.zeros((1, 30))
-                dummy_row[0, log_return_indices[asset_i]] = predicted_scaled_return
-                
-                unscaled_log_return = self.scaler.inverse_transform(dummy_row)[0, log_return_indices[asset_i]]
-                predicted_price = last_closes[asset_i] * np.exp(unscaled_log_return)
-                asset_quantiles.append(float(predicted_price))
-                
-            results[asset_name] = {
-                "p10_crash_boundary": asset_quantiles[0],
-                "p50_median_forecast": asset_quantiles[1],
-                "p90_breakout_boundary": asset_quantiles[2]
-            }
-            
+
+        for asset_i, asset_name in enumerate(('BTC', 'ETH', 'SOL')):
+            asset_result = {}
+            for h_i, h_name in enumerate(horizon_names):
+                # Quantile predictions -> absolute prices
+                log_ret_idx = ASSET_FEATURE_COLS.index('log_return')
+                q_vals = quantiles[asset_i, h_i]
+
+                asset_prices = {}
+                for q_i, q_label in enumerate(['p10_crash_boundary', 'p50_median_forecast', 'p90_breakout_boundary']):
+                    predicted_return = q_vals[q_i]
+                    asset_prices[q_label] = float(
+                        last_closes[asset_i] * np.exp(predicted_return)
+                    )
+
+                asset_result[f'quantiles_{h_name}'] = asset_prices
+
+                # Direction predictions
+                dir_probs = directions[asset_i, h_i]
+                predicted_class = int(np.argmax(dir_probs))
+                asset_result[f'direction_{h_name}'] = {
+                    'direction': direction_labels[predicted_class],
+                    'confidence': float(np.max(dir_probs)),
+                }
+
+            results[asset_name] = asset_result
+
         return results
