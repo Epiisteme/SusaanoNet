@@ -18,7 +18,10 @@ The machine learning pipeline is built as a state-of-the-art hybrid deep learnin
 4. **Spatial Fusion (GNN 2):** A secondary graph layer that allows the temporally processed sequences to communicate cross-asset dependencies once more before making predictions.
 5. **Dual-Head Output:** Optimizes a Combined Loss function (`loss_alpha = 0.5`). 
    - *Regression Head:* Optimizes Pinball Loss for probabilistic boundaries.
-   - *Classification Head:* Optimizes Cross-Entropy Loss for Cost-Aware 3-class directional targets (Up, Down, Neutral) bounded by a 0.1% minimum trading fee threshold.
+   - *Classification Head:* Optimizes Cross-Entropy Loss for Cost-Aware 3-class directional targets (Up, Down, Neutral).
+     - **UP**: The asset's price is predicted to rise by *more* than the 0.1% trading fee (Profitable Long).
+     - **DOWN**: The asset's price is predicted to fall by *more* than the 0.1% trading fee (Profitable Short).
+     - **NEUTRAL**: The price will fluctuate by *less* than the 0.1% fee (Do not trade, fees will negate profit).
 
 ## 3. Dataset Configuration
 
