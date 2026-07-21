@@ -90,16 +90,15 @@ function updateDashboardUI() {
         badge.style.display = 'inline-flex';
         badge.className = 'dir-badge'; // reset classes
         
-        const confPct = Math.round(d_data.confidence * 100);
         if (d_data.direction === 'up') {
             badge.classList.add('up');
-            badge.textContent = `⬆️ UP (${confPct}%)`;
+            badge.textContent = `UP`;
         } else if (d_data.direction === 'down') {
             badge.classList.add('down');
-            badge.textContent = `⬇️ DOWN (${confPct}%)`;
+            badge.textContent = `DOWN`;
         } else {
             badge.classList.add('neutral');
-            badge.textContent = `⏸️ NEUTRAL`;
+            badge.textContent = `NEUTRAL`;
         }
 
         // Update Chart
