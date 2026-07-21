@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Architecture Quantile Visualizer</title>
+    
+    <!-- Google Fonts for Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Vanilla CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <h1>Susanoo Systems</h1>
+                <p>Multi-Asset Spatial-Temporal Forecasting Engine</p>
+            </div>
+            <div class="controls">
+                <select id="horizon-selector" class="horizon-select">
+                    <option value="15m" selected>15-Minute Forecast</option>
+                    <option value="1h">1-Hour Forecast</option>
+                    <option value="4h">4-Hour Forecast</option>
+                </select>
+                <button id="predict-btn" class="turquoise-btn">
+                    <span class="btn-text">Generate Quantile Forecasts</span>
+                    <div class="loader hidden" id="btn-loader"></div>
+                </button>
+            </div>
+        </header>
+
+        <!-- Status Panel -->
+        <div class="status-panel">
+            <div class="status-indicator">
+                <div class="pulse-dot"></div>
+                <span>Hybrid Engine: Online</span>
+            </div>
+            <div class="macro-stats">
+                <div class="stat-box">
+                    <span class="stat-label">Variable Selection Network</span>
+                    <span class="stat-value">Active</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Sequence Model</span>
+                    <span class="stat-value">Mamba-3 MIMO</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Loss Function</span>
+                    <span class="stat-value">Pinball (Quantile)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            <!-- BTC Card -->
+            <div class="asset-card">
+                <div class="card-header">
+                    <div class="header-left">
+                        <h2>Bitcoin (BTC)</h2>
+                        <span class="dir-badge" id="btc-dir" style="display: none;">--</span>
+                    </div>
+                    <span class="live-price" id="btc-price">$60,050.00</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="btcChart"></canvas>
+                </div>
+                <div class="quantile-metrics">
+                    <div class="metric breakout">
+                        <span>Upper Confidence Bound</span>
+                        <h3 id="btc-p90">--</h3>
+                    </div>
+                    <div class="metric median">
+                        <span>Median Expected Value</span>
+                        <h3 id="btc-p50">--</h3>
+                    </div>
+                    <div class="metric crash">
+                        <span>Lower Confidence Bound</span>
+                        <h3 id="btc-p10">--</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ETH Card -->
+            <div class="asset-card">
+                <div class="card-header">
+                    <div class="header-left">
+                        <h2>Ethereum (ETH)</h2>
+                        <span class="dir-badge" id="eth-dir" style="display: none;">--</span>
+                    </div>
+                    <span class="live-price" id="eth-price">$3,005.00</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="ethChart"></canvas>
+                </div>
+                <div class="quantile-metrics">
+                    <div class="metric breakout">
+                        <span>Upper Confidence Bound</span>
+                        <h3 id="eth-p90">--</h3>
+                    </div>
+                    <div class="metric median">
+                        <span>Median Expected Value</span>
+                        <h3 id="eth-p50">--</h3>
+                    </div>
+                    <div class="metric crash">
+                        <span>Lower Confidence Bound</span>
+                        <h3 id="eth-p10">--</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SOL Card -->
+            <div class="asset-card">
+                <div class="card-header">
+                    <div class="header-left">
+                        <h2>Solana (SOL)</h2>
+                        <span class="dir-badge" id="sol-dir" style="display: none;">--</span>
+                    </div>
+                    <span class="live-price" id="sol-price">$150.50</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="solChart"></canvas>
+                </div>
+                <div class="quantile-metrics">
+                    <div class="metric breakout">
+                        <span>Upper Confidence Bound</span>
+                        <h3 id="sol-p90">--</h3>
+                    </div>
+                    <div class="metric median">
+                        <span>Median Expected Value</span>
+                        <h3 id="sol-p50">--</h3>
+                    </div>
+                    <div class="metric crash">
+                        <span>Lower Confidence Bound</span>
+                        <h3 id="sol-p10">--</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
